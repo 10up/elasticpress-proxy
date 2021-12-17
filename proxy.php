@@ -305,7 +305,7 @@ class EP_PHP_Proxy {
 		/**
 		 * If there's no aggregations in the template or if the relation isn't 'and', we are done.
 		 */
-		if ( empty( $this->query['aggs'] ) || 'or' === $this->relation ) {
+		if ( empty( $this->query['aggs'] ) || 'and' !== $this->relation ) {
 			return;
 		}
 
@@ -335,6 +335,7 @@ class EP_PHP_Proxy {
 			 * Don't apply a filter to a matching aggregation if the relation is 'or'.
 			 */
 			foreach ( $this->filters as $filter_name => $filter ) {
+				// @todo: this relation should not be the global one but the relation between aggs.
 				if ( $filter_name === $agg_name && 'or' === $this->relation ) {
 					continue;
 				}
