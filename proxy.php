@@ -23,7 +23,7 @@ class EP_PHP_Proxy {
 	/**
 	 * The query to be sent to Elasticsearch.
 	 *
-	 * @var string|object
+	 * @var string|array
 	 */
 	protected $query;
 
@@ -301,34 +301,73 @@ class EP_PHP_Proxy {
 				],
 			];
 		}
+
+		/**
+		 * If there's no aggregations in the template or if the relation isn't 'and', we are done.
+		 */
+		if ( empty( $this->query['aggs'] ) || 'or' === $this->relation ) {
+			return;
+		}
+
+		/**
+		 * Apply filters to aggregations.
+		 *
+		 * Note the usage of `&agg` (passing by reference.)
+		 */
+		foreach ( $this->query['aggs'] as $agg_name => &$agg ) {
+			$new_filters = [];
+
+			/**
+			 * Only filter an aggregation if there's sub-aggregations.
+			 */
+			if ( empty( $agg['aggs'] ) ) {
+				continue;
+			}
+
+			/**
+			 * Get any existing filter, or a placeholder.
+			 */
+			$existing_filter = $agg['filter'] ?? [ 'match_all' => [ 'boost' => 1 ] ];
+
+			/**
+			 * Get new filters for this aggregation.
+			 *
+			 * Don't apply a filter to a matching aggregation if the relation is 'or'.
+			 */
+			foreach ( $this->filters as $filter_name => $filter ) {
+				if ( $filter_name === $agg_name && 'or' === $this->relation ) {
+					continue;
+				}
+
+				$new_filters[] = $filter;
+			}
+
+			/**
+			 * Add filters to the aggregation.
+			 */
+			if ( ! empty( $new_filters ) ) {
+				$agg['filter'] = [
+					'bool' => [
+						'must' => [
+							$existing_filter,
+							[
+								'bool' => [
+									$occurrence => $new_filters,
+								],
+							],
+						],
+					],
+				];
+			}
+		}
 	}
 
 	/**
 	 * Make the cURL request.
 	 */
 	protected function make_request() {
-		$search_type = ! empty( $_REQUEST['type'] ) ?
-			$this->sanitize_string( $_REQUEST['type'] ) :
-			'simple';
-
-		// Set headers.
-		if ( 'msearch' === $search_type ) {
-			$http_headers = [ 'Content-Type: application/x-ndjson' ];
-			$endpoint     = $this->post_index_url . '/_msearch';
-			$this->query  = implode(
-				"\n",
-				[
-					'{}',
-					$this->query,
-					'{}',
-					str_replace( 'bowl', 'show', $this->query ),
-					'',
-				]
-			);
-		} else {
-			$http_headers = [ 'Content-Type: application/json' ];
-			$endpoint     = $this->post_index_url . '/_search';
-		}
+		$http_headers = [ 'Content-Type: application/json' ];
+		$endpoint     = $this->post_index_url . '/_search';
 
 		// Create the cURL request.
 		$this->request = curl_init( $endpoint );
