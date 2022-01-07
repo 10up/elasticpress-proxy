@@ -92,11 +92,10 @@ class EP_PHP_Proxy {
 	 * Build the query to be sent, i.e., get the template and make all necessary replaces/changes.
 	 */
 	protected function build_query() {
-		$this->set_search_term();
-
 		// For the next replacements, we'll need to work with an object
 		$this->query = json_decode( $this->query, true );
 
+		$this->set_search_term();
 		$this->set_pagination();
 		$this->set_order();
 		$this->set_highlighting();
@@ -106,6 +105,7 @@ class EP_PHP_Proxy {
 
 		$this->handle_post_type_filter();
 		$this->handle_taxonomies_filters();
+		$this->handle_price_filter();
 
 		$this->apply_filters();
 
@@ -117,7 +117,17 @@ class EP_PHP_Proxy {
 	 */
 	protected function set_search_term() {
 		$search_term = $this->sanitize_string( $_REQUEST['search'] );
-		$this->query = str_replace( '{{ep_placeholder}}', $search_term, $this->query );
+
+		// Stringify the JSON object again just to make the str_replace easier.
+		if ( ! empty( $search_term ) ) {
+			$query_string = json_encode( $this->query );
+			$query_string = str_replace( '{{ep_placeholder}}', $search_term, $query_string );
+			$this->query  = json_decode( $query_string, true );
+			return;
+		}
+
+		// If there is no search term, get everything.
+		$this->query = [ 'query' => [ 'match_all' => [ 'boost' => 1 ] ] ];
 	}
 
 	/**
@@ -238,13 +248,21 @@ class EP_PHP_Proxy {
 	 * Add taxonomies to the filters.
 	 */
 	protected function handle_taxonomies_filters() {
-		$taxonomies = [];
+		$taxonomies    = [];
+		$tax_relations = ( ! empty( $_REQUEST['term_relations'] ) ) ? (array) $_REQUEST['term_relations'] : [];
 		foreach ( (array) $_REQUEST as $key => $value ) {
 			if ( ! preg_match( '/^tax-(\S+)$/', $key, $matches ) ) {
 				continue;
 			}
+
+			$taxonomy = $matches[1];
+
+			$relation = ( ! empty( $tax_relations[ $taxonomy ] ) ) ?
+				$this->sanitize_string( $tax_relations[ $taxonomy ] ) :
+				$this->relation;
+
 			$taxonomies[ $matches[1] ] = [
-				'relation' => 'or', // @todo implement the tax
+				'relation' => $relation,
 				'terms'    => array_map( [ $this, 'sanitize_number' ], explode( ',', $value ) ),
 			];
 		}
@@ -274,6 +292,34 @@ class EP_PHP_Proxy {
 			$this->filters[ $taxonomy_slug ] = [
 				'bool' => [
 					'must' => $terms,
+				],
+			];
+		}
+	}
+
+	/**
+	 * Add price ranges to the filters.
+	 */
+	protected function handle_price_filter() {
+		$min_price = ( ! empty( $_REQUEST['min_price'] ) ) ? $this->sanitize_string( $_REQUEST['min_price'] ) : '';
+		$max_price = ( ! empty( $_REQUEST['max_price'] ) ) ? $this->sanitize_string( $_REQUEST['max_price'] ) : '';
+
+		if ( $min_price ) {
+			$this->filters['min_price'] = [
+				'range' => [
+					'meta._price.double' => [
+						'gte' => $min_price,
+					],
+				],
+			];
+		}
+
+		if ( $max_price ) {
+			$this->filters['max_price'] = [
+				'range' => [
+					'meta._price.double' => [
+						'lte' => $max_price,
+					],
 				],
 			];
 		}
