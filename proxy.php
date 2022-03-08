@@ -23,7 +23,7 @@ class EP_PHP_Proxy {
 	/**
 	 * The query to be sent to Elasticsearch.
 	 *
-	 * @var string|object
+	 * @var string|array
 	 */
 	protected $query;
 
@@ -92,11 +92,10 @@ class EP_PHP_Proxy {
 	 * Build the query to be sent, i.e., get the template and make all necessary replaces/changes.
 	 */
 	protected function build_query() {
-		$this->set_search_term();
-
 		// For the next replacements, we'll need to work with an object
 		$this->query = json_decode( $this->query, true );
 
+		$this->set_search_term();
 		$this->set_pagination();
 		$this->set_order();
 		$this->set_highlighting();
@@ -106,6 +105,7 @@ class EP_PHP_Proxy {
 
 		$this->handle_post_type_filter();
 		$this->handle_taxonomies_filters();
+		$this->handle_price_filter();
 
 		$this->apply_filters();
 
@@ -117,7 +117,17 @@ class EP_PHP_Proxy {
 	 */
 	protected function set_search_term() {
 		$search_term = $this->sanitize_string( $_REQUEST['search'] );
-		$this->query = str_replace( '{{ep_placeholder}}', $search_term, $this->query );
+
+		// Stringify the JSON object again just to make the str_replace easier.
+		if ( ! empty( $search_term ) ) {
+			$query_string = json_encode( $this->query );
+			$query_string = str_replace( '{{ep_placeholder}}', $search_term, $query_string );
+			$this->query  = json_decode( $query_string, true );
+			return;
+		}
+
+		// If there is no search term, get everything.
+		$this->query['query'] = [ 'match_all' => [ 'boost' => 1 ] ];
 	}
 
 	/**
@@ -238,13 +248,21 @@ class EP_PHP_Proxy {
 	 * Add taxonomies to the filters.
 	 */
 	protected function handle_taxonomies_filters() {
-		$taxonomies = [];
+		$taxonomies    = [];
+		$tax_relations = ( ! empty( $_REQUEST['term_relations'] ) ) ? (array) $_REQUEST['term_relations'] : [];
 		foreach ( (array) $_REQUEST as $key => $value ) {
 			if ( ! preg_match( '/^tax-(\S+)$/', $key, $matches ) ) {
 				continue;
 			}
+
+			$taxonomy = $matches[1];
+
+			$relation = ( ! empty( $tax_relations[ $taxonomy ] ) ) ?
+				$this->sanitize_string( $tax_relations[ $taxonomy ] ) :
+				$this->relation;
+
 			$taxonomies[ $matches[1] ] = [
-				'relation' => 'or', // @todo implement the tax
+				'relation' => $relation,
 				'terms'    => array_map( [ $this, 'sanitize_number' ], explode( ',', $value ) ),
 			];
 		}
@@ -280,6 +298,34 @@ class EP_PHP_Proxy {
 	}
 
 	/**
+	 * Add price ranges to the filters.
+	 */
+	protected function handle_price_filter() {
+		$min_price = ( ! empty( $_REQUEST['min_price'] ) ) ? $this->sanitize_string( $_REQUEST['min_price'] ) : '';
+		$max_price = ( ! empty( $_REQUEST['max_price'] ) ) ? $this->sanitize_string( $_REQUEST['max_price'] ) : '';
+
+		if ( $min_price ) {
+			$this->filters['min_price'] = [
+				'range' => [
+					'meta._price.double' => [
+						'gte' => $min_price,
+					],
+				],
+			];
+		}
+
+		if ( $max_price ) {
+			$this->filters['max_price'] = [
+				'range' => [
+					'meta._price.double' => [
+						'lte' => $max_price,
+					],
+				],
+			];
+		}
+	}
+
+	/**
 	 * Add filters to the query.
 	 */
 	protected function apply_filters() {
@@ -301,34 +347,74 @@ class EP_PHP_Proxy {
 				],
 			];
 		}
+
+		/**
+		 * If there's no aggregations in the template or if the relation isn't 'and', we are done.
+		 */
+		if ( empty( $this->query['aggs'] ) || 'and' !== $this->relation ) {
+			return;
+		}
+
+		/**
+		 * Apply filters to aggregations.
+		 *
+		 * Note the usage of `&agg` (passing by reference.)
+		 */
+		foreach ( $this->query['aggs'] as $agg_name => &$agg ) {
+			$new_filters = [];
+
+			/**
+			 * Only filter an aggregation if there's sub-aggregations.
+			 */
+			if ( empty( $agg['aggs'] ) ) {
+				continue;
+			}
+
+			/**
+			 * Get any existing filter, or a placeholder.
+			 */
+			$existing_filter = $agg['filter'] ?? [ 'match_all' => [ 'boost' => 1 ] ];
+
+			/**
+			 * Get new filters for this aggregation.
+			 *
+			 * Don't apply a filter to a matching aggregation if the relation is 'or'.
+			 */
+			foreach ( $this->filters as $filter_name => $filter ) {
+				// @todo: this relation should not be the global one but the relation between aggs.
+				if ( $filter_name === $agg_name && 'or' === $this->relation ) {
+					continue;
+				}
+
+				$new_filters[] = $filter;
+			}
+
+			/**
+			 * Add filters to the aggregation.
+			 */
+			if ( ! empty( $new_filters ) ) {
+				$agg['filter'] = [
+					'bool' => [
+						'must' => [
+							$existing_filter,
+							[
+								'bool' => [
+									$occurrence => $new_filters,
+								],
+							],
+						],
+					],
+				];
+			}
+		}
 	}
 
 	/**
 	 * Make the cURL request.
 	 */
 	protected function make_request() {
-		$search_type = ! empty( $_REQUEST['type'] ) ?
-			$this->sanitize_string( $_REQUEST['type'] ) :
-			'simple';
-
-		// Set headers.
-		if ( 'msearch' === $search_type ) {
-			$http_headers = [ 'Content-Type: application/x-ndjson' ];
-			$endpoint     = $this->post_index_url . '/_msearch';
-			$this->query  = implode(
-				"\n",
-				[
-					'{}',
-					$this->query,
-					'{}',
-					str_replace( 'bowl', 'show', $this->query ),
-					'',
-				]
-			);
-		} else {
-			$http_headers = [ 'Content-Type: application/json' ];
-			$endpoint     = $this->post_index_url . '/_search';
-		}
+		$http_headers = [ 'Content-Type: application/json' ];
+		$endpoint     = $this->post_index_url . '/_search';
 
 		// Create the cURL request.
 		$this->request = curl_init( $endpoint );
