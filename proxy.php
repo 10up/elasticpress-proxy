@@ -127,7 +127,7 @@ class EP_PHP_Proxy {
 		}
 
 		// If there is no search term, get everything.
-		$this->query = [ 'query' => [ 'match_all' => [ 'boost' => 1 ] ] ];
+		$this->query['query'] = [ 'match_all' => [ 'boost' => 1 ] ];
 	}
 
 	/**
