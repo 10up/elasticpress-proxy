@@ -1,5 +1,5 @@
 {
-  "name": "10/ elasticpress-proxy",
+  "name": "10up/elasticpress-proxy",
   "description": "A custom PHP Proxy to handle Instant Results requests.",
   "type": "wordpress-plugin",
   "keywords": ["wordpress", "plugin", "elasticsearch", "elasticpress", "search"],
