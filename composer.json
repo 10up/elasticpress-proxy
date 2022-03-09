@@ -1,0 +1,16 @@
+{
+	"name": "10/ elasticpress-proxy",
+	"description": "A custom PHP Proxy to handle Instant Results requests.",
+	"type": "wordpress-plugin",
+	"keywords": ["wordpress", "plugin", "elasticsearch", "elasticpress", "search"],
+	"license": ["GPL-2.0-only"],
+  "authors": [
+    {
+      "name": "10up",
+      "homepage": "http://10up.com"
+    }
+  ],
+	"require": {
+    "php": ">=7.0"
+  }
+}
