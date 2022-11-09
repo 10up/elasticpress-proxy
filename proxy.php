@@ -255,6 +255,10 @@ class EP_PHP_Proxy {
 				continue;
 			}
 
+			if ( empty( $value ) ) {
+				continue;
+			}
+
 			$taxonomy = $matches[1];
 
 			$relation = ( ! empty( $tax_relations[ $taxonomy ] ) ) ?
@@ -266,6 +270,7 @@ class EP_PHP_Proxy {
 				'terms'    => array_map( [ $this, 'sanitize_number' ], explode( ',', $value ) ),
 			];
 		}
+
 		if ( empty( $taxonomies ) ) {
 			return;
 		}
