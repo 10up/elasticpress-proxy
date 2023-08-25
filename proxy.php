@@ -350,10 +350,14 @@ class EP_PHP_Proxy
 
 		$existing_filter = (!empty($this->query['post_filter'])) ? $this->query['post_filter'] : ['match_all' => ['boost' => 1]];
 
-		//add support for wpml
+
+		//add support for wpml and limit to products
 		foreach ($existing_filter['bool']['must'] as $key => $must_filter) {
-			if ($must_filter['term']['post_lang.keyword'] != null) {
-				$existing_filter['bool']['must'][$key]['term']['post_lang.keyword'] = $_COOKIE['wp-wpml_current_language'];
+			if ($must_filter['term']['post_lang'] != null) {
+				$existing_filter['bool']['must'][$key]['term']['post_lang'] = $_COOKIE['wp-wpml_current_language'];
+			}
+			if ($must_filter['terms']['post_type.raw'] != null) {
+				$existing_filter['bool']['must'][$key]['terms']['post_type.raw'] = ['product'];
 			}
 		}
 
@@ -370,7 +374,16 @@ class EP_PHP_Proxy
 					],
 				],
 			];
+		} else {
+			$this->query['post_filter'] = [
+				'bool' => [
+					'must' => [
+						$existing_filter,
+					],
+				],
+			];
 		}
+
 
 		/**
 		 * If there's no aggregations in the template or if the relation isn't 'and', we are done.
@@ -404,6 +417,7 @@ class EP_PHP_Proxy
 			 *
 			 * Don't apply a filter to a matching aggregation if the relation is 'or'.
 			 */
+
 			foreach ($this->filters as $filter_name => $filter) {
 				// @todo: this relation should not be the global one but the relation between aggs.
 				if ($filter_name === $agg_name && 'or' === $this->relation) {
@@ -439,7 +453,12 @@ class EP_PHP_Proxy
 	protected function make_request()
 	{
 		$http_headers = ['Content-Type: application/json'];
-		$endpoint     = $this->post_index_url . '/_search';
+		if ($_COOKIE['wp-wpml_current_language'] != 'it') {
+			$endpoint     = $this->post_index_url . '-' . $_COOKIE['wp-wpml_current_language'] . '/_search';
+		} else {
+			$endpoint     = $this->post_index_url . '/_search';
+		}
+
 
 		// Create the cURL request.
 		$this->request = curl_init($endpoint);
