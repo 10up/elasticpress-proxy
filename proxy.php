@@ -452,7 +452,7 @@ class EP_PHP_Proxy
 	 */
 	protected function make_request()
 	{
-		$http_headers = ['Content-Type: application/json'];
+		$http_headers = ['Content-Type: application/json', 'Authorization: Basic d3BoZXh0cmFzZWFyY2g6WmxYRXlwcEhESEpE'];
 		//$headers['Authorization'] = 'Basic ' . base64_encode($shield);
 		if (isset($_COOKIE['wp-wpml_current_language'])) {
 			if ($_COOKIE['wp-wpml_current_language'] != 'it') {
