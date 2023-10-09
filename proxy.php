@@ -72,17 +72,8 @@ class EP_PHP_Proxy
 	protected $post_index_url = '';
 
 	/**
-	 * Default WPML site language
-	 *
-	 * @var string
-	 */
-
-	protected $deafult_language = 'it';
-
-	/**
 	 * Entry point of the class.
 	 */
-
 	public function proxy()
 	{
 		/**
@@ -94,7 +85,6 @@ class EP_PHP_Proxy
 
 		$this->query          = $query_template;
 		$this->post_index_url = $post_index_url;
-		$this->deafult_language = $deafult_language;
 
 		$this->build_query();
 		$this->make_request();
@@ -463,8 +453,9 @@ class EP_PHP_Proxy
 	protected function make_request()
 	{
 		$http_headers = ['Content-Type: application/json'];
+		//$headers['Authorization'] = 'Basic ' . base64_encode($shield);
 		if (isset($_COOKIE['wp-wpml_current_language'])) {
-			if ($_COOKIE['wp-wpml_current_language'] != $this->deafult_language) {
+			if ($_COOKIE['wp-wpml_current_language'] != 'it') {
 				$endpoint     = $this->post_index_url . '-' . $_COOKIE['wp-wpml_current_language'] . '/_search';
 			} else {
 				$endpoint     = $this->post_index_url . '/_search';
@@ -472,7 +463,6 @@ class EP_PHP_Proxy
 		} else {
 			$endpoint     = $this->post_index_url . '/_search';
 		}
-
 
 		// Create the cURL request.
 		$this->request = curl_init($endpoint);
