@@ -72,6 +72,13 @@ class EP_PHP_Proxy
 	protected $post_index_url = '';
 
 	/**
+	 * The Authorization Header
+	 *
+	 * @var string
+	 */
+	protected $authorization = '';
+
+	/**
 	 * Entry point of the class.
 	 */
 	public function proxy()
@@ -85,6 +92,7 @@ class EP_PHP_Proxy
 
 		$this->query          = $query_template;
 		$this->post_index_url = $post_index_url;
+		$this->authorization  = $authorization;
 
 		$this->build_query();
 		$this->make_request();
@@ -452,8 +460,13 @@ class EP_PHP_Proxy
 	 */
 	protected function make_request()
 	{
-		$http_headers = ['Content-Type: application/json', 'Authorization: Basic d3BoZXh0cmFzZWFyY2g6WmxYRXlwcEhESEpE'];
-		//$headers['Authorization'] = 'Basic ' . base64_encode($shield);
+		if ($this->authorization != 'null') {
+			$http_headers = ['Content-Type: application/json', 'Authorization: Basic ' . $this->authorization];
+		} else {
+			$http_headers = ['Content-Type: application/json'];
+		}
+
+
 		if (isset($_COOKIE['wp-wpml_current_language'])) {
 			if ($_COOKIE['wp-wpml_current_language'] != 'it') {
 				$endpoint     = $this->post_index_url . '-' . $_COOKIE['wp-wpml_current_language'] . '/_search';
