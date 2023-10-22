@@ -466,7 +466,6 @@ class EP_PHP_Proxy
 			$http_headers = ['Content-Type: application/json'];
 		}
 
-
 		if (isset($_COOKIE['wp-wpml_current_language'])) {
 			if ($_COOKIE['wp-wpml_current_language'] != 'it') {
 				$endpoint     = $this->post_index_url . '-' . $_COOKIE['wp-wpml_current_language'] . '/_search';
@@ -494,6 +493,17 @@ class EP_PHP_Proxy
 		);
 
 		$this->response = curl_exec($this->request);
+
+		// Fetch all info from the request.
+		$header_size      = curl_getinfo($this->request, CURLINFO_HEADER_SIZE);
+		$response_body    = substr($this->response, $header_size);
+
+		$risultati = json_decode($response_body);
+
+		if ($risultati->hits->total->value == 0) {
+			curl_close($this->request);
+			$this->simple_call($endpoint, $http_headers);
+		}
 	}
 
 	/**
@@ -558,6 +568,34 @@ class EP_PHP_Proxy
 	protected function sanitize_number($string)
 	{
 		return filter_var($string, FILTER_SANITIZE_NUMBER_INT);
+	}
+
+	protected function simple_call($endpoint, $http_headers)
+	{
+		$new_query = json_decode($this->query, true);
+		unset($new_query["post_filter"]);
+		foreach ($new_query['query']['function_score']['query']['bool']['should'][0]['bool']['must'][0]['bool']['should'] as
+			$key => $multimatch) {
+			if ($multimatch['multi_match']['type'] == "phrase") {
+				$new_query['query']['function_score']['query']['bool']['should'][0]['bool']['must'][0]['bool']['should'][$key]['multi_match']['type'] = "phrase_prefix";
+			}
+		}
+		$new_query = json_encode($new_query);
+		//make curl request
+		$this->request = curl_init($endpoint);
+		curl_setopt($this->request, CURLOPT_POSTFIELDS, $new_query);
+
+		curl_setopt_array(
+			$this->request,
+			[
+				CURLOPT_FOLLOWLOCATION => true,
+				CURLOPT_HEADER         => true,
+				CURLOPT_RETURNTRANSFER => true,
+				CURLINFO_HEADER_OUT    => true,
+				CURLOPT_HTTPHEADER     => $http_headers,
+			]
+		);
+		$this->response = curl_exec($this->request);
 	}
 }
 
