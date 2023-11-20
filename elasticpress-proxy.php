@@ -45,7 +45,12 @@ function save_template($search_template)
 	if (defined('ES_SHIELD') && ES_SHIELD) {
 		$authorization = base64_encode(ES_SHIELD);
 	}
-
+	if (defined('GA4_MEASUREMENT_ID') && GA4_MEASUREMENT_ID) {
+		$measurement_id = GA4_MEASUREMENT_ID;
+	}
+	if (defined('GA4_API_KEY') && GA4_API_KEY) {
+		$api_secret = GA4_API_KEY;
+	}
 	require_once ABSPATH . '/wp-admin/includes/file.php';
 	WP_Filesystem();
 
@@ -55,6 +60,8 @@ function save_template($search_template)
 		'$post_index_url = \'' . $post_index_url . '\';',
 		'$query_template = \'' . $search_template . '\';',
 		'$authorization = \'' . $authorization . '\';',
+		'$measurement_id = \'' . $measurement_id . '\';',
+		'$api_secret = \'' . $api_secret . '\';',
 		'',
 	];
 
