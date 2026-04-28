@@ -455,7 +455,9 @@ class EP_PHP_Proxy {
 			$response_code = 404;
 		}
 
-		curl_close( $this->request );
+		if ( version_compare( PHP_VERSION, '8.0', '<' ) ) {
+			curl_close( $this->request );
+		}
 
 		// Respond with the same headers, content and status code.
 
